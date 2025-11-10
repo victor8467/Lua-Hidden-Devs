@@ -26,13 +26,12 @@ function BulletCaster.new(startPos, direction, speed, range, ignoreList, onHitCa
 	self.player = player
 	self.Gun = firedGun
 	self.Bullet = bullet
-
 	return self
 end
 
 
 function BulletCaster:CreateTracer(origin, direction,gun) --creates a tracer for the client
-	local tracer = TracerPool:GetTracer()
+	local tracer = TracerPool:GetTracer() --Gets a bullet from the tracer pool for less lag
 	if origin and direction then
 		tracer.CFrame = CFrame.new(origin,origin + direction) * CFrame.new(0, 0, -0.5) 
 	else
@@ -44,7 +43,7 @@ function BulletCaster:CreateTracer(origin, direction,gun) --creates a tracer for
 	return tracer
 end
 
-function BulletCaster:CreateBullet(gun)
+function BulletCaster:CreateBullet(gun)-- creates bullet based  on dimensions specified on the weapon
 	local BulletD = gun:GetAttribute("BDimensions") or gun:FindFirstChild("BulletChamber"):FindFirstChild("Bullet"):GetAttribute("Dimensions")
 	local Bullet
 	for _,bullet in ipairs(BulletsFolder:GetChildren()) do
@@ -60,8 +59,8 @@ function BulletCaster:CreateBullet(gun)
 	return Bullet
 end
 
-function BulletCaster:MakeBulletPassBy(startPos,endPos,head)
-	local headPos = head.Position
+function BulletCaster:MakeBulletPassBy(startPos,endPos,head) -- This function checks if a bullet passes a player to create a pass by Sound FX
+	local headPos = head.Position -- this function runs on all clients  when a bullet is fired
 	local function FindClosestPointOnLine()
 		local direction = endPos - startPos
 		local t = ((headPos- startPos):Dot(direction)/(direction:Dot(direction)))
@@ -71,26 +70,20 @@ function BulletCaster:MakeBulletPassBy(startPos,endPos,head)
 	local closestPoint = FindClosestPointOnLine()
 	local distance = (closestPoint-headPos).Magnitude
 	local maxDist = 3
-	
 	if distance > maxDist then return end
 	
 	local bulletPasses = bulletSounds.BulletPassingBy
 	local rndNum = math.random(0, #bulletPasses:GetChildren())
 
 	local passSfx
-
 	for i, sfx in ipairs(bulletPasses:GetChildren()) do
 		if i ~= rndNum then continue end
 		passSfx = sfx:Clone()
 		break
 	end
-	
 	if not passSfx then return end
-	
 	passSfx.Parent = head
 	passSfx:Destroy()
-	
-	
 end
 
 function BulletCaster:CastTracer(origin, direction, gun,hitPosition)--creates tracer for the client 
@@ -105,12 +98,12 @@ function BulletCaster:CastTracer(origin, direction, gun,hitPosition)--creates tr
 	local tweenInfo  = TweenInfo.new(.1, Enum.EasingStyle.Linear)
 	local goal = {Position = hitPosition}
 	
-	local Tween = TweenService:Create(tracer, tweenInfo,goal)
+	local Tween = TweenService:Create(tracer, tweenInfo,goal) --uses tweens to create the bullet tracer as its more optimized than simulating it like on the server (believe me i tried)
 	Tween:Play()
 	
 	tracer.Trail.Enabled = true
 	Tween.Completed:Once(function()
-		TracerPool:ReturnTracer(tracer)
+		TracerPool:ReturnTracer(tracer) --Return the tracer to the tracer pool for optimization
 	end)
 end
 
@@ -122,10 +115,8 @@ function BulletCaster:CastRocket(DataPacket) -- casts rocket for the rocket laun
 	local RunCon
 	local DistanceTraveled = 0
 	local Direction = DataPacket["Direction"]
-	local Bullet = BulletCaster:CreateBullet(DataPacket["Gun"])
+	local Bullet = BulletCaster:CreateBullet(DataPacket["Gun"]) --Gets all the Data from the data packet received
 	
-	
-
 	local RayCastInfo = OverlapParams.new()
 	RayCastInfo.FilterType = Enum.RaycastFilterType.Exclude
 	RayCastInfo.FilterDescendantsInstances = DataPacket["IgnoreList"]
@@ -150,7 +141,7 @@ function BulletCaster:CastRocket(DataPacket) -- casts rocket for the rocket laun
 			Bullet:Destroy()
 			return
 		end
-
+			
 		DistanceTraveled += (nextPos - position).Magnitude
 		if DistanceTraveled >= Range then
 			RunCon:Disconnect()
@@ -165,7 +156,6 @@ function BulletCaster:CastRocket(DataPacket) -- casts rocket for the rocket laun
 	end)
 	
 end
-
 
 function BulletCaster:StartTravel()
 	local velocity = self.Direction * self.Speed
@@ -190,9 +180,9 @@ function BulletCaster:StartTravel()
 	if self.Gun:FindFirstChild("Bullet") then self.Gun:FindFirstChild("Bullet").Transparency = 1 end
 	
 	RunCon = RunService.Heartbeat:Connect(function(dt)
-		nextPos = self.Position + velocity * dt
+		nextPos = self.Position + velocity * dt --Gets the next position of the bullet
 		
-		local DebugPart = Instance.new("Part")
+		local DebugPart = Instance.new("Part")-- debug part
 		DebugPart.Anchored = true
 		DebugPart.CanCollide = false
 		DebugPart.CanQuery = false
@@ -201,14 +191,14 @@ function BulletCaster:StartTravel()
 		DebugPart.Parent = workspace
 		game.Debris:AddItem(DebugPart,3)
 		
-		local Boundings = workspace:GetPartBoundsInBox(CFrame.new(self.Position, self.Position + self.Direction), Vector3.new(.5,.5,5), RayCastInfo)
+		local Boundings = workspace:GetPartBoundsInBox(CFrame.new(self.Position, self.Position + self.Direction), Vector3.new(.5,.5,5), RayCastInfo) --gets all parts intersecting the bullet at the current position
 		if #Boundings >= 1 then
 			--print(Boundings[1])
 			RunCon:Disconnect()
 			self.OnHit(Boundings[1],self.Position)
 			return
 		end
-		self.DistanceTraveled += (nextPos - self.Position).Magnitude
+		self.DistanceTraveled += (nextPos - self.Position).Magnitude --checks the distance that the bullet travelled so far
 		
 		if self.DistanceTraveled >= self.Range then
 			RunCon:Disconnect()
@@ -225,17 +215,16 @@ function BulletCaster:StartTravel()
 		["Speed"] = self.Speed,
 		["Gun"] = self.Gun,
 		["Range"] = self.Range
-	}
+	} --creates a data pack to send to the clients
 
 	for _, plr in ipairs(game.Players:GetPlayers()) do
-		if plr ~= self.player then
+		if plr ~= self.player then --fires to every client except the owner of the weapon or bullet i guess
 			CastTravel:FireClient(plr, DataPacket)
 		end
 	end
 end
 
 function BulletCaster:StartRay()-- casts a ray on the server
-	
 	local velocity = self.Direction * self.Speed
 
 	local gravity = Vector3.new(0, -workspace.Gravity + 160, 0) 
@@ -245,7 +234,7 @@ function BulletCaster:StartRay()-- casts a ray on the server
 	overlapParams.FilterType = Enum.RaycastFilterType.Exclude
 	overlapParams.FilterDescendantsInstances = self.IgnoreList
 
-	local touchingParts = workspace:GetPartsInPart(muzzle, overlapParams)
+	local touchingParts = workspace:GetPartsInPart(muzzle, overlapParams)-- verifys if the player has the weapon in like a wall or any rigid object that has collision
 
 	if #touchingParts > 0 then return end
 	
@@ -280,12 +269,11 @@ function BulletCaster:StartRay()-- casts a ray on the server
 		finalPos = self.Direction * self.Range
 	end
 	
-	for _, plr in ipairs(game.Players:GetPlayers()) do --fires for every player except the player that fired first
+	for _, plr in ipairs(game.Players:GetPlayers()) do --fires for every player except the owner
 		if plr ~= self.player then
 			print(plr)
 			CastTracer:FireClient(plr, self.Position, self.Direction,self.Gun,finalPos)
 		end
 	end
 end
-
 return BulletCaster
